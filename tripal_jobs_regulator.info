@@ -1,0 +1,3 @@
+name = Tripal Jobs Regulator
+description = A wrapper for tripal jobs to run jobs by role
+core = 7.x
