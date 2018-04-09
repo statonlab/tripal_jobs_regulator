@@ -115,6 +115,21 @@ function tripal_jobs_regulator_get_next_job($role) {
     return db_query($sql)->fetchField() ?: FALSE;
   }
 
+  if ($role === 'administrator' || $role === 'admins') {
+    $sql = "
+      SELECT TJ.job_id
+      FROM tripal_jobs TJ
+      WHERE TJ.start_time IS NULL
+        AND TJ.end_time IS NULL
+        AND TJ.status != 'Cancelled'
+        AND TJ.uid = 1
+      ORDER BY priority ASC, job_id ASC
+      LIMIT 1
+    ";
+
+    return db_query($sql)->fetchField() ?: FALSE;
+  }
+
 
   $sql = "
       SELECT TJ.job_id
@@ -158,6 +173,17 @@ function tripal_jobs_regulator_count($role) {
         AND TJ.end_time IS NULL
         AND TJ.status != 'Cancelled'
         AND TJ.uid > 1
+    ")->fetchField();
+  }
+
+  if ($role === 'administrator' || $role === 'admins') {
+    return db_query("
+        SELECT COUNT(TJ.job_id)
+        FROM tripal_jobs TJ
+        WHERE TJ.start_time IS NULL
+        AND TJ.end_time IS NULL
+        AND TJ.status != 'Cancelled'
+        AND TJ.uid = 1
     ")->fetchField();
   }
 
