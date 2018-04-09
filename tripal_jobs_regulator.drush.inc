@@ -35,11 +35,11 @@ function tripal_jobs_regulator_drush_command() {
  * Runs when jobs-regulator-run is called
  */
 function drush_tripal_jobs_regulator_jobs_regulator_run() {
-  $parallel = drush_get_option('parallel');
+  $parallel = drush_get_option('parallel', 0);
   $max_jobs = drush_get_option('max_jobs', -1);
   $single = drush_get_option('single', 0);
   $username = drush_get_option('username');
-  $role = drush_get_option('role', 'administrator');
+  $role = trim(drush_get_option('role', 'administrator'));
 
   // Check that the role exists
   $role_exists = db_query('SELECT * FROM {role} WHERE name=:name', [
@@ -56,53 +56,120 @@ function drush_tripal_jobs_regulator_jobs_regulator_run() {
   // Run the jobs
   drush_print("\n" . date('Y-m-d H:i:s'));
 
-  while (($job_id = tripal_jobs_regulator_get_next_job($role)) !== FALSE) {
-    if ($parallel) {
-      drush_print("Tripal Job Launcher (in parallel)");
-      if ($max_jobs !== -1) {
-        drush_print("Maximum number of jobs is " . $max_jobs);
-      }
-      drush_print("Running as user '$username'");
-      drush_print("-------------------");
+  if ($parallel) {
+    drush_print("Tripal Job Launcher (in parallel)");
+    if ($max_jobs !== -1) {
+      drush_print("Maximum number of jobs is " . $max_jobs);
+    }
+  }
+  else {
+    drush_print("Tripal Job Launcher");
+  }
 
-      tripal_launch_job($parallel, $job_id, $max_jobs, $single);
-    }
-    else {
-      drush_print("Tripal Job Launcher");
-      drush_print("Running as user '$username'");
-      drush_print("-------------------");
-      tripal_launch_job(0, $job_id, $max_jobs, $single);
-    }
+  $message = "Running as user '$username'. Role: $role";
+  drush_print($message);
+  drush_print(str_pad("", strlen($message), '-'));
+
+  $count = tripal_jobs_regulator_count($role);
+  drush_print("There are $count jobs pending for the given role.");
+
+  while (($job_id = tripal_jobs_regulator_get_next_job($role)) !== FALSE) {
+    tripal_launch_job($parallel, $job_id, $max_jobs, $single);
   }
 }
 
 /**
  * Get the next job to run.
- * 
+ *
  * @param $role
  *
  * @return int|bool
  */
 function tripal_jobs_regulator_get_next_job($role) {
+  if ($role === 'anonymous user') {
+    $sql = "
+      SELECT TJ.job_id
+      FROM tripal_jobs TJ
+      WHERE TJ.start_time IS NULL
+        AND TJ.end_time IS NULL
+        AND TJ.status != 'Cancelled'
+        AND TJ.uid = 0
+      ORDER BY priority ASC, job_id ASC
+      LIMIT 1
+    ";
+    return db_query($sql)->fetchField() ?: FALSE;
+  }
+
+  if ($role === 'authenticated user') {
+    $sql = "
+      SELECT TJ.job_id
+      FROM tripal_jobs TJ
+      WHERE TJ.start_time IS NULL
+        AND TJ.end_time IS NULL
+        AND TJ.status != 'Cancelled'
+        AND TJ.uid > 1
+      ORDER BY priority ASC, job_id ASC
+      LIMIT 1
+    ";
+
+    return db_query($sql)->fetchField() ?: FALSE;
+  }
+
+
   $sql = "
       SELECT TJ.job_id
       FROM tripal_jobs TJ
       INNER JOIN users U ON TJ.uid = U.uid
       INNER JOIN users_roles UR ON U.uid = UR.uid
       INNER JOIN role R ON R.rid = UR.rid    
-      WHERE
-        TJ.start_time IS NULL
+      WHERE TJ.start_time IS NULL
         AND TJ.end_time IS NULL
         AND TJ.status != 'Cancelled'
         AND R.name=:role
       ORDER BY priority ASC, job_id ASC
       LIMIT 1
     ";
-  $job = db_query($sql, [':role' => $role])->fetchObject();
 
-  if ($job) {
-    return $job->job_id;
+  return db_query($sql, [':role' => $role])->fetchField() ?: FALSE;
+}
+
+/**
+ * Count the number of available jobs to run.
+ *
+ * @return mixed
+ */
+function tripal_jobs_regulator_count($role) {
+  if ($role === 'anonymous user') {
+    return db_query("
+        SELECT COUNT(TJ.job_id)
+        FROM tripal_jobs TJ
+        WHERE TJ.start_time IS NULL
+        AND TJ.end_time IS NULL
+        AND TJ.status != 'Cancelled'
+        AND TJ.uid = 0
+    ")->fetchField();
   }
 
-  return FALSE;
+  if ($role === 'authenticated user') {
+    return db_query("
+        SELECT COUNT(TJ.job_id)
+        FROM tripal_jobs TJ
+        WHERE TJ.start_time IS NULL
+        AND TJ.end_time IS NULL
+        AND TJ.status != 'Cancelled'
+        AND TJ.uid > 1
+    ")->fetchField();
+  }
+
+  $query = "SELECT COUNT(TJ.job_id)
+      FROM tripal_jobs TJ
+      INNER JOIN users U ON TJ.uid = U.uid
+      INNER JOIN users_roles UR ON U.uid = UR.uid
+      INNER JOIN role R ON R.rid = UR.rid    
+      WHERE TJ.start_time IS NULL
+        AND TJ.end_time IS NULL
+        AND TJ.status != 'Cancelled'
+        AND R.name=:role";
+
+  return db_query($query, [':role' => $role])->fetchField();
 }
