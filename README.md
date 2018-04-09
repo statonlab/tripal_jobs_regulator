@@ -20,12 +20,12 @@ drush jobs-regulator-run --username="administrator" --role="authenticated user" 
 
 **Options**
 
-| Name | Description |
-| ---- | ----------- |
-| `username` | **REQUIRED**. The user to run the jobs |
-| `role` | **REQUIRED**. The role of the job submitter |
-| `parallel` | **OPTIONAL**. Whether to run jobs in parallel |
-| `max_jobs` | **OPTIONAL**. When running in parallel, how many jobs should run simultaneously. Use -1 or leave blank if all jobs should run in parallel without restrictions |
+| Name |             | Description |
+| ---- | ----------- | ----------- |
+| `username` | **REQUIRED** | The user to run the jobs |
+| `role` | **REQUIRED** | The role of the job submitter |
+| `parallel` | **OPTIONAL** | Whether to run jobs in parallel |
+| `max_jobs` | **OPTIONAL** | When running in parallel, how many jobs should run simultaneously. Use -1 or leave blank if all jobs should run in parallel without restrictions |
 
 **NOTE**: The `max_jobs` option at this stage doesn't take role into account and won't
 run if the number specified is reached by one or more runners.
